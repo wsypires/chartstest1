@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: opencharts
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npx serve -s dist
+    envVars:
+      - key: NODE_ENV
+        value: production
+  - type: redis
+    name: redis
+    plan: free
