@@ -6,6 +6,7 @@ import {
   ArrowUpDown,
   ArrowUpRight,
   BarChart3,
+  Bell,
   Bot,
   CalendarDays,
   ChevronDown,
@@ -40,6 +41,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
+import { useMemo } from "react";
 import {
   type DrawingLine,
   type DrawingTool,
@@ -105,6 +107,8 @@ export interface ChartToolbarProps {
   onCycleMagnet?: () => void;
   stayInDrawingMode?: boolean;
   onToggleStayInDrawingMode?: () => void;
+  activeAlerts?: Record<string, { threshold: number; condition: "above" | "below"; triggered: boolean }>;
+  onAlertRemove?: (alertId: string) => void;
 }
 
 export function ChartToolbar({
@@ -141,6 +145,19 @@ export function ChartToolbar({
 }: ChartToolbarProps) {
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
+  const [showAlertConfig, setShowAlertConfig] = useState(false);
+  const [activeAlertIndicator, setActiveAlertIndicator] = useState<IndicatorType | null>(null);
+  const [alertThresholdValue, setAlertThresholdValue] = useState("");
+  const [alertCondition, setAlertCondition] = useState<string | null>(null);
+  const activeAlerts = useMemo(() => {
+    // Load from localStorage
+    try {
+      const stored = localStorage.getItem("opencharts_alerts");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }, []);
 
   const filteredSymbols = symbols.filter(
     (s) =>
@@ -363,6 +380,128 @@ export function ChartToolbar({
                   <span className="text-[10px] text-muted-foreground">{ind.pane}</span>
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+      }
+
+      {/* Alerts */}
+      {
+        <div className="relative hidden md:block">
+          <button
+            onClick={() => setShowAlertConfig((v) => !v)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded text-xs",
+              Object.keys(activeAlerts).length > 0 ? "bg-primary/20 text-primary" : "hover:bg-secondary text-muted-foreground",
+            )}
+          >
+            <Bell className="h-3 w-3" />
+            Alerts
+            {Object.keys(activeAlerts).length > 0 && (
+              <span className="bg-primary text-primary-foreground rounded-full px-1 text-[9px]">
+                {Object.keys(activeAlerts).length}
+              </span>
+            )}
+          </button>
+
+          {showAlertConfig && (
+            <div className="absolute top-full left-0 z-50 mt-1 w-80 bg-card border border-border rounded-lg shadow-xl p-4 space-y-3">
+              <h3 className="font-medium text-sm mb-3">Set Alert</h3>
+              <div className="space-y-2">
+                <label className="block text-xs text-muted-foreground mb-1">Symbol</label>
+                <span className="text-sm font-medium">{selectedSymbol}</span>
+
+                <label className="block text-xs text-muted-foreground mb-1">Indicator</label>
+                <div className="mt-1">
+                  {INDICATOR_REGISTRY.map((ind) => (
+                    <button
+                      key={ind.type}
+                      onClick={() => setActiveAlertIndicator(ind.type)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-secondary text-left",
+                        activeAlertIndicator === ind.type && "bg-secondary",
+                      )}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: ind.color }}
+                      />
+                      <span className="flex-1">{ind.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <label className="block text-xs text-muted-foreground mb-1">Threshold</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={alertThresholdValue}
+                  onChange={(e) => setAlertThresholdValue(e.target.value)}
+                  className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+
+                <label className="block text-xs text-muted-foreground mb-1">Condition</label>
+                <div className="mt-1 flex space-x-2">
+                  <button
+                    onClick={() => setAlertCondition("above")}
+                    className={cn(
+                      "flex-1 rounded border border-border px-2 py-1 text-sm",
+                      alertCondition === "above" ? "bg-primary text-primary" : "hover:bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    Above
+                  </button>
+                  <button
+                    onClick={() => setAlertCondition("below")}
+                    className={cn(
+                      "flex-1 rounded border border-border px-2 py-1 text-sm",
+                      alertCondition === "below" ? "bg-primary text-primary" : "hover:bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    Below
+                  </button>
+                </div>
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      if (alertThresholdValue && alertCondition && activeAlertIndicator) {
+                        setShowAlertConfig(false);
+                        // Store alert directly in localStorage using activeAlerts
+                        const newAlerts = {
+                          ...activeAlerts,
+                          [activeAlertIndicator]: {
+                            threshold: alertThresholdValue,
+                            condition: alertCondition,
+                            triggered: false,
+                          },
+                        };
+                        // Update local state via useMemo recalculation will happen on next render
+                        // Save to localStorage
+                        try {
+                          localStorage.setItem("opencharts_alerts", JSON.stringify(newAlerts));
+                        } catch {
+                          // Ignore storage errors
+                        }
+                      }
+                    }}
+                    className="px-3 py-1 rounded bg-primary text-primary-foreground text-sm"
+                  >
+                    Create Alert
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAlertConfig(false);
+                      setActiveAlertIndicator(null);
+                      setAlertThresholdValue("");
+                      setAlertCondition(null);
+                    }}
+                    className="px-3 py-1 rounded border border-border text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

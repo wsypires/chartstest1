@@ -117,6 +117,7 @@ export function TradingPage() {
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>([]);
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [drawingTool, setDrawingTool] = useState<DrawingTool>("none");
+  const [alerts, setAlerts] = useState<Record<string, { threshold: number; condition: "above" | "below"; triggered: boolean }>>({});
   const {
     drawings,
     addDrawing,
@@ -316,6 +317,14 @@ export function TradingPage() {
     setActiveIndicators([]);
   }, []);
 
+  const removeAlert = useCallback((alertId: string) => {
+    setAlerts((prev) => {
+      const next = { ...prev };
+      delete next[alertId];
+      return next;
+    });
+  }, []);
+
   // Deep-history target used after the initial fast render completes.
   const deepCandleLimit = useMemo(() => {
     switch (timeframe) {
@@ -454,6 +463,8 @@ export function TradingPage() {
         onToggleStayInDrawingMode={() =>
           updateChartPreferences({ stayInDrawingMode: !chartPrefs.stayInDrawingMode })
         }
+        activeAlerts={alerts}
+        onAlertRemove={removeAlert}
       />
 
       <MarketClosedBanner symbolInfo={symbolInfo} />
